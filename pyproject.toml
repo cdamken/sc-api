@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sc-api"
+version = "0.0.1"
+description = "Minimal Python client for Scalable Capital (DE) — Broker + Wealth, cookie-based auth via browser, no headed-browser workaround"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "BSL-1.1" }
+authors = [{ name = "Carlos Damken" }]
+keywords = ["scalable-capital", "scalable", "fintech", "api", "client", "broker", "wealth", "roboadvisor"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Programming Language :: Python :: 3",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Office/Business :: Financial :: Investment",
+]
+dependencies = [
+    "requests>=2.31",
+    "websockets>=14",
+    "pycookiecheat>=0.7",
+]
+
+[project.optional-dependencies]
+browser = ["playwright>=1.40"]
+dev = ["pytest>=7", "pytest-asyncio>=0.23", "playwright>=1.40"]
+
+[project.scripts]
+sc-api = "sc_api.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/cdamken/sc-api"
+Issues = "https://github.com/cdamken/sc-api/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]

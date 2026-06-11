@@ -84,6 +84,7 @@ __all__ = [
     "Profile",
     "Identity",
     # Sub-modules
+    "auth",
     "cookies",
     "identity",
     "portfolio",
@@ -92,6 +93,7 @@ __all__ = [
     "savings",
     "securities",
     "transactions",
+    "wealth",
     # Exceptions
     "ScApiError",
     "CookieError",

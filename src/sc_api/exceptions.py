@@ -97,6 +97,37 @@ class SessionExpired(AuthError):
     """
 
 
+# --- Programmatic-login (Auth0 + push 2FA) failures ---
+# Canonical home for the login exception hierarchy. `auth.py` re-imports
+# these so `sc_api.auth.LoginError` keeps working; downstreams import them
+# from `sc_api.exceptions` (the ownCloud fetch_wrapper does exactly that —
+# importing them from `auth` was the cause of the v0.0.5 "invalid response"
+# crash, since they used to live only in auth.py).
+class LoginError(AuthError):
+    """Generic programmatic-login failure."""
+
+
+class InvalidCredentials(LoginError):
+    """Email or password rejected by Auth0."""
+
+
+class PushDenied(LoginError):
+    """User tapped 'Deny' on the push notification."""
+
+
+class PushTimeout(LoginError):
+    """User didn't approve the push within the timeout window."""
+
+
+class PushSetupError(LoginError):
+    """Server says 2FA isn't enrolled, or otherwise can't start a push.
+
+    Scalable enforces 2FA since March 2024 so this typically means the
+    user needs to enroll a device first (once, in the Scalable mobile
+    app or web cockpit).
+    """
+
+
 class ApiError(ScApiError):
     """Scalable returned an unexpected response."""
 

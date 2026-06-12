@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sc-api"
-version = "0.0.1"
+version = "0.0.2"
 description = "Minimal Python client for Scalable Capital (DE) — Broker + Wealth, cookie-based auth via browser, no headed-browser workaround"
 readme = "README.md"
 requires-python = ">=3.10"

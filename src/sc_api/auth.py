@@ -49,7 +49,12 @@ import requests
 from .exceptions import (
     AuthError,
     GraphQLError,
+    InvalidCredentials,
     InvalidSessionCookie,
+    LoginError,
+    PushDenied,
+    PushSetupError,
+    PushTimeout,
     ScApiError,
 )
 
@@ -80,29 +85,11 @@ PUSH_POLL_TIMEOUT_SEC = 120.0
 # ---------------------------------------------------------------------------
 # Exceptions
 # ---------------------------------------------------------------------------
-class LoginError(AuthError):
-    """Generic login failure."""
-
-
-class InvalidCredentials(LoginError):
-    """Email or password rejected by Auth0."""
-
-
-class PushDenied(LoginError):
-    """User tapped 'Deny' on the push notification."""
-
-
-class PushTimeout(LoginError):
-    """User didn't approve the push within the timeout window."""
-
-
-class PushSetupError(LoginError):
-    """Server says 2FA isn't enrolled, or otherwise can't start a push.
-
-    Scalable enforces 2FA since March 2024 so this typically means the
-    user needs to enroll a device first (do it once in the Scalable
-    mobile app or web cockpit).
-    """
+# The login hierarchy lives in exceptions.py (its canonical home, with the
+# rest of the tree) so downstreams import it from `sc_api.exceptions`.
+# Re-imported here so `sc_api.auth.LoginError` etc. keep working. Moving
+# them out of this module fixed the ownCloud wrapper's "invalid response"
+# crash (it imported them from sc_api.exceptions, where they weren't).
 
 
 # ---------------------------------------------------------------------------

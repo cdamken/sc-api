@@ -61,22 +61,42 @@ If Scalable uses a bot-protection challenge (Cloudflare / AWS-WAF / similar),
 the JS challenge runs through Playwright **headless**, mirroring
 `tr_api.waf` — we never open a Chromium window the user sees.
 
-## Auth model — fits the cross-trio table
+## Auth model — fits the cross-trio table (confirmed 2026-06-16)
 
-To be filled in Phase 0. Expected shape (verify with HAR):
+|                    | sc-api / Scalable                                |
+|--------------------|--------------------------------------------------|
+| Initial login      | Auth0 email + password + **push** approval (no TOTP) |
+| Access lifetime    | session cookie, ceiling ~8h                       |
+| Refresh model      | re-auth on 401/403 (→ `exit 10`); **no** GBM-style proactive Bearer refresh |
+| Long-lived secret  | session cookie `{"user":{"userId":personId}}`    |
+| Re-MFA cadence     | when the ~8h cookie dies → new push                |
+| Endpoint           | `de.scalable.capital` + `/cockpit/graphql` + WS    |
 
-|                    | sc-api / Scalable                              |
-|--------------------|------------------------------------------------|
-| Initial login      | email + password + push approval on linked phone |
-| Access lifetime    | TBD (likely session cookie ≥ 1h)                |
-| Refresh model      | TBD — probably proactive keepalive like tr-api  |
-| Long-lived secret  | session cookie chain                            |
-| Re-MFA cadence     | TBD                                             |
-| Endpoint           | TBD — likely `de.scalable.capital` + GraphQL + WS |
+> **CONTRASTE con GBM**: SC **no** sufre el burn-down del access token de GBM.
+> No apliques aquí el fix de refresh proactivo de gbm-mx-api. El "Update failed"
+> que vimos fue de **config/ruta** (`readRoutes()` sin exponer `benchmark`, o
+> cuenta equivocada), no de sesión. Ver ADR `2026-06-16 — SC` en
+> [../Portfolio-Master/DECISIONS.md](../Portfolio-Master/DECISIONS.md).
 
-This row gets added to
-[../TR-GBM-Project/ARCHITECTURE.md](../TR-GBM-Project/ARCHITECTURE.md)
-once Phase 0 confirms the details.
+## Disponibilidad de datos (confirmado 2026-06-16)
+
+UN solo login Auth0, **DOS productos** en arrays paralelos: **Broker** y
+**Wealth** (roboadvisor). **Ninguno es "solo posiciones"** — a diferencia de la
+cuenta Trading USA de GBM, no hay aquí una cuenta con ese gap:
+
+- **Broker**: `inventory.json` (+`fifoPrice`), `cash.json`, `transactions.json`
+  (BUY/SELL/DEPOSIT/WITHDRAWAL/DISTRIBUTION/TAX/INTEREST…, discriminador
+  `__typename`). `SECURITY_TRANSACTION` trae `side` + `amount` → **sin gap de
+  total de orden**.
+- **Wealth**: `wealth.json` + `wealth_detail.json` (TWR, `valuationHistory`,
+  allocation — datos ricos).
+- Opcionales: `broker_overview`, `savings`, `watchlist`, `crypto`, `interest`.
+- Moneda **EUR**.
+- Gaps menores: yield-on-cost cruza `fifoPrice`; `wealth_detail` se trae una vez
+  (puede ir atrasado); paginación por cursor de `savings` sin confirmar; quotes
+  realtime por WS sin cablear.
+
+→ La nota de UI "solo posiciones" es **exclusiva de GBM**; SC no la lleva.
 
 ## Protocol — what we know going in (verify in Phase 0)
 
@@ -113,12 +133,12 @@ Note: Scalable uses push approval, not TOTP — `EXIT_MFA_REQUIRED` /
 
 Pattern #5 from
 [`../TR-GBM-Project/TECHNICAL-PATTERNS.md`](../TR-GBM-Project/TECHNICAL-PATTERNS.md):
-`login_or_refresh()` that tries persisted session → refresh-token →
-full login (push required). Persist atomically (tmp → fsync → rename)
-to `~/.sc-api/session.json` mode 0600. Strategy depends on Phase 0 —
-either proactive keepalive (tr-api style) or on-demand refresh
-(gbm-mx-api style) depending on what Scalable's session lifetime turns
-out to be.
+`login_or_refresh()` that tries persisted session → full login (push
+required). Persist atomically (tmp → fsync → rename) to
+`~/.sc-api/session.json` mode 0600. **Confirmed 2026-06-16**: la sesión es una
+cookie con techo ~8h; el patrón es **re-auth on-demand ante 401/403** (no
+keepalive como tr-api, no refresh-Bearer proactivo como gbm-mx-api). Poll a
+`validate2faOnLogin` ~120s durante el login con push.
 
 ## Repo layout (mirrors tr-api)
 

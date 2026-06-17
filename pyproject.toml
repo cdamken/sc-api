@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sc-api"
-version = "0.0.2"
+version = "0.0.3"
 description = "Minimal Python client for Scalable Capital (DE) — Broker + Wealth, cookie-based auth via browser, no headed-browser workaround"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,6 +21,10 @@ dependencies = [
     "requests>=2.31",
     "websockets>=14",
     "pycookiecheat>=0.7",
+    # curl_cffi replays Chrome's TLS/JA3 fingerprint for the Auth0 login so
+    # Scalable's bot detection serves a captcha-free form (plain requests gets
+    # fingerprinted and walled). auth.py falls back to requests if it's absent.
+    "curl_cffi>=0.7",
 ]
 
 [project.optional-dependencies]

@@ -77,6 +77,11 @@ DEFAULT_USER_AGENT = (
     "Chrome/148.0.0.0 Safari/537.36"
 )
 
+# curl_cffi browser profile to impersonate for the Auth0 login. Must be a
+# profile curl_cffi ships a TLS fingerprint for; "chrome" tracks a recent
+# stable Chrome. Bump if Auth0 starts fingerprinting newer Chrome builds.
+CFFI_IMPERSONATE = "chrome"
+
 # Push approval timing
 PUSH_POLL_INTERVAL_SEC = 2.0
 PUSH_POLL_TIMEOUT_SEC = 120.0
@@ -152,22 +157,50 @@ returns. Common implementations:
 # ---------------------------------------------------------------------------
 # Browser-shaped session helper
 # ---------------------------------------------------------------------------
-def _build_session() -> requests.Session:
-    """Return a requests.Session that looks like a real Chrome.
+def _build_session():
+    """Return a session that talks to Auth0 with a real Chrome fingerprint.
 
-    Scalable's Auth0 and edge gateways check Origin/Referer/UA on some
-    paths. Matching them avoids spurious 4xx.
+    Scalable's Auth0 fronts the login with bot detection (Friendly Captcha).
+    It triggers on the TLS/JA3 fingerprint of plain `requests`/urllib3 — it
+    injects a `captcha` field the headless client can't solve, then re-renders
+    the login form (which we'd misread as bad credentials, exit 12). A real
+    browser is never challenged. `curl_cffi` replays Chrome's exact TLS
+    fingerprint from pure Python — no browser, no Chromium — so Auth0 serves
+    the normal, captcha-free login form. Verified server-side 2026-06-17.
+
+    Falls back to plain `requests` (browser-shaped headers only) if curl_cffi
+    isn't installed — useful for environments not behind the bot wall.
     """
-    s = requests.Session()
-    s.headers.update({
-        "User-Agent": DEFAULT_USER_AGENT,
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language": "en-US,en;q=0.9",
-        "Sec-Ch-Ua": '"Google Chrome";v="148", "Chromium";v="148", "Not=A?Brand";v="24"',
-        "Sec-Ch-Ua-Mobile": "?0",
-        "Sec-Ch-Ua-Platform": '"macOS"',
-    })
-    return s
+    try:
+        from curl_cffi import requests as _cffi
+        # impersonate replays Chrome's TLS/JA3 AND a matching header set;
+        # do NOT override UA/Sec-Ch-Ua here or the fingerprint goes
+        # inconsistent (header says one Chrome, JA3 says another).
+        return _cffi.Session(impersonate=CFFI_IMPERSONATE)
+    except ImportError:
+        s = requests.Session()
+        s.headers.update({
+            "User-Agent": DEFAULT_USER_AGENT,
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Sec-Ch-Ua": '"Google Chrome";v="148", "Chromium";v="148", "Not=A?Brand";v="24"',
+            "Sec-Ch-Ua-Mobile": "?0",
+            "Sec-Ch-Ua-Platform": '"macOS"',
+        })
+        return s
+
+
+def _to_requests_jar(session) -> "requests.cookies.RequestsCookieJar":
+    """Normalize a session's cookie jar (curl_cffi or requests) to a
+    RequestsCookieJar of http.cookiejar.Cookie objects, so downstream
+    `cookies.save_jar_to_file` (which iterates yielding Cookie objects)
+    works regardless of the HTTP backend.
+    """
+    jar = requests.cookies.RequestsCookieJar()
+    src = getattr(session.cookies, "jar", session.cookies)
+    for c in src:
+        jar.set_cookie(c)
+    return jar
 
 
 def _post_auth_graphql(
@@ -662,7 +695,7 @@ def login_flow(
     _warm_up_cockpit(session)
 
     return LoginResult(
-        cookies=session.cookies,
+        cookies=_to_requests_jar(session),
         user_id=user_id,
         mfa_was_required=mfa_triggered,
     )
